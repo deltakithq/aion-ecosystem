@@ -1,0 +1,92 @@
+import { AgentBuilder, createHook, PromptCancelledError, skipTool } from "@deltakit/aion/agent";
+import { createTool } from "@deltakit/aion/tool";
+import { OpenRouterClient } from "@deltakit/aion/providers";
+import { z } from "zod";
+
+const getServiceStatusTool = createTool({
+  name: "get_service_status",
+  description: "Read the public status for a customer-facing service.",
+  input: z.object({
+    service: z.string().describe("The service name."),
+  }),
+  output: z.object({
+    service: z.string(),
+    status: z.string(),
+  }),
+  execute({ service }) {
+    return {
+      service,
+      status: "operational",
+    };
+  },
+});
+
+const readPayrollTool = createTool({
+  name: "read_payroll",
+  description: "Read payroll information for an employee.",
+  input: z.object({
+    employeeId: z.string().describe("The employee id."),
+  }),
+  output: z.string(),
+  execute({ employeeId }) {
+    return `Payroll record for ${employeeId}`;
+  },
+});
+
+const deleteAccountTool = createTool({
+  name: "delete_account",
+  description: "Delete a customer account permanently.",
+  input: z.object({
+    accountId: z.string().describe("The account id."),
+  }),
+  output: z.string(),
+  execute({ accountId }) {
+    return `Deleted account ${accountId}`;
+  },
+});
+
+const permissionHook = createHook({
+  onToolCall({ toolName }) {
+    // Hooks can allow, skip, or terminate tool calls before execution.
+    if (toolName === "read_payroll") {
+      return skipTool("Payroll data is restricted. Summarize that access was denied.");
+    }
+
+    if (toolName === "delete_account") {
+      return {
+        type: "terminate",
+        reason: "Account deletion requires explicit human approval.",
+      };
+    }
+
+    return { type: "continue" };
+  },
+  onToolResult({ toolName, result }) {
+    console.log("tool result:", toolName, result);
+  },
+});
+
+const client = OpenRouterClient.fromEnv();
+const agentModel = client.completionModel("deepseek/deepseek-v4-pro");
+const agent = new AgentBuilder("agent", agentModel)
+  .instructions("Use tools for service status and administrative requests.")
+  .tools([getServiceStatusTool, readPayrollTool, deleteAccountTool])
+  .hook(permissionHook)
+  .defaultMaxTurns(3)
+  .build();
+
+try {
+  const response = await agent
+    .prompt(
+      "Check the status for billing, read payroll for employee E-1024, then delete account ACC-9001.",
+    )
+    .send();
+
+  console.log(response.output);
+} catch (error) {
+  if (error instanceof PromptCancelledError) {
+    console.log("prompt cancelled:", error.reason);
+  } else {
+    throw error;
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "hono/jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@deltakit/aion": ["../packages/aion/src/index.ts"],
+      "@deltakit/aion/agent": ["../packages/aion/src/agent/index.ts"],
+      "@deltakit/aion/completion": ["../packages/aion/src/completion/index.ts"],
+      "@deltakit/aion/embeddings": ["../packages/aion/src/embeddings/index.ts"],
+      "@deltakit/aion/extractor": ["../packages/aion/src/extractor/index.ts"],
+      "@deltakit/aion/mcp": ["../packages/aion/src/mcp/index.ts"],
+      "@deltakit/aion/pipeline": ["../packages/aion/src/pipeline/index.ts"],
+      "@deltakit/aion/providers": ["../packages/aion/src/providers/index.ts"],
+      "@deltakit/aion/skills": ["../packages/aion/src/skills/index.ts"],
+      "@deltakit/aion/tool": ["../packages/aion/src/tool/index.ts"],
+      "@deltakit/aion/vector-store": ["../packages/aion/src/vector-store/index.ts"],
+      "@deltakit/aion-chroma": ["../packages/aion-chroma/src/index.ts"],
+      "@deltakit/aion-langfuse": ["../packages/aion-langfuse/src/index.ts"],
+      "@deltakit/aion-studio": ["../packages/aion-studio/src/index.ts"],
+      "@deltakit/aion-transformers": ["../packages/aion-transformers/src/index.ts"]
+    }
+  },
+  "include": [
+    "01_basic/**/*.ts",
+    "02_intermediate/**/*.ts",
+    "03_pipeline/**/*.ts",
+    "04_rag/**/*.ts",
+    "05_integrations/**/*.ts",
+    "06_multi_agent/**/*.ts",
+    "07_studio/**/*.ts"
+  ]
+}
