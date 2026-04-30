@@ -346,7 +346,7 @@ function withStudioTraceObserver(
       temperature: studioAgent.agent.temperature,
       maxTokens: studioAgent.agent.maxTokens,
       additionalParams: studioAgent.agent.additionalParams,
-      toolServerHandle: studioAgent.agent.toolServerHandle,
+      toolRegistry: studioAgent.agent.toolRegistry,
       toolChoice: studioAgent.agent.toolChoice,
       defaultMaxTurns: studioAgent.agent.defaultMaxTurns,
       hook: studioAgent.agent.hook,

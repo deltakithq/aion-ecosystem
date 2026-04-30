@@ -65,7 +65,7 @@ export class Extractor<T, M extends CompletionModel = CompletionModel> {
 
     for (let attempt = 0; attempt <= this.retryCount; attempt += 1) {
       try {
-        const toolDefs = await this.agent.toolServerHandle.getToolDefs(extractRagText(prompt));
+        const toolDefs = await this.agent.toolRegistry.getToolDefinitions(extractRagText(prompt));
         const response = await new CompletionRequestBuilder(this.agent.model, prompt)
           .instructions(this.agent.instructions)
           .messages(history ?? [])

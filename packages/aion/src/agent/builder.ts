@@ -3,7 +3,7 @@ import type { McpServer } from "../mcp";
 import type { AgentObserver, AgentObserverRegistration, ObserveOptions } from "../observability";
 import { toProviderJsonSchema, type ZodSchema } from "../schema/zod-schema";
 import type { SkillSet } from "../skills";
-import { ToolServer, type ToolServerHandle } from "../tool/server";
+import { ToolRegistry } from "../tool/registry";
 import type { Tool } from "../tool/tool";
 import type { VectorStoreIndex } from "../vector-store";
 import { Agent, type DynamicContextOptions, type DynamicContextRegistration } from "./agent";
@@ -25,8 +25,8 @@ export class AgentBuilder<M extends CompletionModel = CompletionModel> {
   private skillInstructionBlocks: string[] = [];
   private observerRegistrations: AgentObserverRegistration[] = [];
   private dynamicContextRegistrations: DynamicContextRegistration[] = [];
-  private toolServer = new ToolServer();
-  private providedToolServer: ToolServerHandle | undefined;
+  private localToolRegistry = new ToolRegistry();
+  private providedToolRegistry: ToolRegistry | undefined;
 
   constructor(
     agentId: string,
@@ -63,18 +63,18 @@ export class AgentBuilder<M extends CompletionModel = CompletionModel> {
   }
 
   tool(tool: Tool): this {
-    this.toolServer.tool(tool);
+    this.localToolRegistry.addTool(tool);
     return this;
   }
 
   tools(tools: Tool[]): this {
-    this.toolServer.tools(tools);
+    this.localToolRegistry.addTools(tools);
     return this;
   }
 
   mcp(servers: McpServer[]): this {
     for (const server of servers) {
-      this.toolServer.tools(server.tools);
+      this.localToolRegistry.addTools(server.tools);
     }
     return this;
   }
@@ -83,12 +83,12 @@ export class AgentBuilder<M extends CompletionModel = CompletionModel> {
     if (skillSet.instructions.length > 0) {
       this.skillInstructionBlocks.push(skillSet.instructions);
     }
-    this.toolServer.tools(skillSet.tools);
+    this.localToolRegistry.addTools(skillSet.tools);
     return this;
   }
 
-  toolServerHandle(handle: ToolServerHandle): this {
-    this.providedToolServer = handle;
+  toolRegistry(registry: ToolRegistry): this {
+    this.providedToolRegistry = registry;
     return this;
   }
 
@@ -146,7 +146,7 @@ export class AgentBuilder<M extends CompletionModel = CompletionModel> {
       temperature: this.temp,
       maxTokens: this.maxTokenCount,
       additionalParams: this.params,
-      toolServerHandle: this.providedToolServer ?? this.toolServer.run(),
+      toolRegistry: this.providedToolRegistry ?? this.localToolRegistry,
       toolChoice: this.choice,
       defaultMaxTurns: this.turns,
       hook: this.requestHook,

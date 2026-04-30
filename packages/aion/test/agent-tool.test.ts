@@ -9,6 +9,7 @@ import {
   createTool,
   MaxTurnsError,
   OpenRouterClient,
+  ToolRegistry,
   ToolSet,
   Usage,
 } from "../src/index";
@@ -123,6 +124,23 @@ describe("Agent.asTool", () => {
     const tool = agent.asTool({ name: "ask_agent", maxTurns: 0 });
 
     await expect(tool.call({ prompt: "loop" })).rejects.toBeInstanceOf(MaxTurnsError);
+  });
+
+  it("uses registry updates made after agent creation", async () => {
+    const model = new QueueModel([
+      response([AssistantContent.toolCall("call_1", "add", { x: 2, y: 5 })]),
+      response([AssistantContent.text("done")]),
+    ]);
+    const registry = new ToolRegistry();
+    const agent = new AgentBuilder("test-agent", model)
+      .toolRegistry(registry)
+      .defaultMaxTurns(1)
+      .build();
+
+    registry.addTool(addTool);
+
+    await expect(agent.prompt("add numbers").send()).resolves.toMatchObject({ output: "done" });
+    expect(model.requests[0]?.tools).toEqual([expect.objectContaining({ name: "add" })]);
   });
 
   it("registers multiple wrapped agents as distinct tools", async () => {

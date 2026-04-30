@@ -164,7 +164,7 @@ export class PromptRequest<M extends CompletionModel = CompletionModel> {
 
         const ragText = extractRagText(prompt);
         const dynamicContext = await this.fetchDynamicContext(ragText);
-        const toolDefs = await this.agent.toolServerHandle.getToolDefs(ragText);
+        const toolDefs = await this.agent.toolRegistry.getToolDefinitions(ragText);
         const request = new CompletionRequestBuilder(this.agent.model, prompt)
           .instructions(this.agent.instructions)
           .messages(historyForRequest)
@@ -246,7 +246,7 @@ export class PromptRequest<M extends CompletionModel = CompletionModel> {
 
         const ragText = extractRagText(prompt);
         const dynamicContext = await this.fetchDynamicContext(ragText);
-        const toolDefs = await this.agent.toolServerHandle.getToolDefs(ragText);
+        const toolDefs = await this.agent.toolRegistry.getToolDefinitions(ragText);
         const request = new CompletionRequestBuilder(this.agent.model, prompt)
           .instructions(this.agent.instructions)
           .messages(historyForRequest)
@@ -417,7 +417,7 @@ export class PromptRequest<M extends CompletionModel = CompletionModel> {
         const approval = await this.requestToolApproval(hookArgs, callAction);
         if (approval.status === "approved") {
           try {
-            output = await this.agent.toolServerHandle.callTool(toolCall.function.name, args);
+            output = await this.agent.toolRegistry.callTool(toolCall.function.name, args);
           } catch (error) {
             output = error instanceof Error ? error.toString() : String(error);
           }
@@ -430,7 +430,7 @@ export class PromptRequest<M extends CompletionModel = CompletionModel> {
         }
       } else {
         try {
-          output = await this.agent.toolServerHandle.callTool(toolCall.function.name, args);
+          output = await this.agent.toolRegistry.callTool(toolCall.function.name, args);
         } catch (error) {
           output = error instanceof Error ? error.toString() : String(error);
         }

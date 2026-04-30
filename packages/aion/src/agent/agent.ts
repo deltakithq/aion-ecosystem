@@ -9,7 +9,7 @@ import type {
 } from "../completion/index";
 import type { AgentObserverRegistration } from "../observability";
 import { createTool } from "../tool/create-tool";
-import { ToolServer, type ToolServerHandle } from "../tool/server";
+import { ToolRegistry } from "../tool/registry";
 import type { Tool } from "../tool/tool";
 import type { VectorFilter, VectorSearchResult, VectorStoreIndex } from "../vector-store";
 import type { PromptHook } from "./hooks";
@@ -25,7 +25,7 @@ export type AgentOptions<M extends CompletionModel = CompletionModel> = {
   temperature?: number | undefined;
   maxTokens?: number | undefined;
   additionalParams?: JsonValue | undefined;
-  toolServerHandle?: ToolServerHandle | undefined;
+  toolRegistry?: ToolRegistry | undefined;
   toolChoice?: ToolChoice | undefined;
   defaultMaxTurns?: number | undefined;
   hook?: PromptHook | undefined;
@@ -64,7 +64,7 @@ export class Agent<M extends CompletionModel = CompletionModel> {
   readonly temperature: number | undefined;
   readonly maxTokens: number | undefined;
   readonly additionalParams: JsonValue | undefined;
-  readonly toolServerHandle: ToolServerHandle;
+  readonly toolRegistry: ToolRegistry;
   readonly toolChoice: ToolChoice | undefined;
   readonly defaultMaxTurns: number | undefined;
   readonly hook: PromptHook | undefined;
@@ -82,7 +82,7 @@ export class Agent<M extends CompletionModel = CompletionModel> {
     this.temperature = options.temperature;
     this.maxTokens = options.maxTokens;
     this.additionalParams = options.additionalParams;
-    this.toolServerHandle = options.toolServerHandle ?? ToolServer.empty().run();
+    this.toolRegistry = options.toolRegistry ?? new ToolRegistry();
     this.toolChoice = options.toolChoice;
     this.defaultMaxTurns = options.defaultMaxTurns ?? DEFAULT_MAX_TURNS;
     this.hook = options.hook;

@@ -5,7 +5,7 @@ import {
   ToolCallError,
   ToolJsonError,
   ToolNotFoundError,
-  ToolServer,
+  ToolRegistry,
   ToolSet,
 } from "../src/index";
 
@@ -103,7 +103,7 @@ describe("ToolSet", () => {
   });
 
   it("advertises appended tool sets without duplicate definitions", async () => {
-    const handle = new ToolServer().tool(addTool).tool(addTool).run();
+    const registry = new ToolRegistry().addTool(addTool).addTool(addTool);
     const echoTool = createTool({
       name: "echo",
       description: "Echo",
@@ -112,12 +112,39 @@ describe("ToolSet", () => {
       execute: ({ value }) => value,
     });
 
-    handle.appendToolSet(ToolSet.fromTools([echoTool]));
+    registry.addToolSet(ToolSet.fromTools([echoTool]));
 
-    await expect(handle.callTool("echo", JSON.stringify({ value: "ok" }))).resolves.toBe("ok");
-    await expect(handle.getToolDefs()).resolves.toEqual([
+    await expect(registry.callTool("echo", JSON.stringify({ value: "ok" }))).resolves.toBe("ok");
+    await expect(registry.getToolDefinitions()).resolves.toEqual([
       expect.objectContaining({ name: "add" }),
       expect.objectContaining({ name: "echo" }),
+    ]);
+  });
+
+  it("removes registered tools", async () => {
+    const registry = new ToolRegistry().addTool(addTool);
+
+    expect(registry.removeTool("add")).toBe(true);
+    await expect(registry.callTool("add", JSON.stringify({ x: 2, y: 5 }))).rejects.toBeInstanceOf(
+      ToolNotFoundError,
+    );
+    await expect(registry.getToolDefinitions()).resolves.toEqual([]);
+  });
+
+  it("replaces duplicate tool names with the latest tool", async () => {
+    const registry = new ToolRegistry().addTool(addTool).addTool(
+      createTool({
+        name: "add",
+        description: "Replace add",
+        input: z.object({ x: z.number(), y: z.number() }),
+        output: z.number(),
+        execute: ({ x, y }) => x * y,
+      }),
+    );
+
+    await expect(registry.callTool("add", JSON.stringify({ x: 2, y: 5 }))).resolves.toBe("10");
+    await expect(registry.getToolDefinitions()).resolves.toEqual([
+      expect.objectContaining({ name: "add", description: "Replace add" }),
     ]);
   });
 });

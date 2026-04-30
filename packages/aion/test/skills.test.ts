@@ -11,11 +11,10 @@ import {
   type CompletionStreamEvent,
   createHook,
   loadSkills,
-  Message,
   SkillValidationError,
   type StreamingCompletionModel,
   skill,
-  ToolServer,
+  ToolRegistry,
   Usage,
 } from "../src/index";
 
@@ -132,19 +131,19 @@ describe("skills", () => {
       scriptFiles: { "helper.sh": "#!/bin/sh\necho helper\n" },
     });
     const skillSet = await loadSkills(skill.local(root));
-    const server = new ToolServer().tools(skillSet.tools).run();
+    const registry = new ToolRegistry().addTools(skillSet.tools);
 
     await expect(
-      server.callTool("get_skill_instructions", JSON.stringify({ skillName: "review" })),
+      registry.callTool("get_skill_instructions", JSON.stringify({ skillName: "review" })),
     ).resolves.toBe("# Review\nUse direct feedback.");
     await expect(
-      server.callTool(
+      registry.callTool(
         "get_skill_reference",
         JSON.stringify({ skillName: "review", referencePath: "guide.md" }),
       ),
     ).resolves.toBe("Reference text");
     await expect(
-      server.callTool(
+      registry.callTool(
         "get_skill_script",
         JSON.stringify({ skillName: "review", scriptPath: "helper.sh" }),
       ),
@@ -162,10 +161,10 @@ describe("skills", () => {
       },
     });
     const skillSet = await loadSkills(skill.local(root));
-    const server = new ToolServer().tools(skillSet.tools).run();
+    const registry = new ToolRegistry().addTools(skillSet.tools);
 
     await expect(
-      server.callTool(
+      registry.callTool(
         "run_skill_script",
         JSON.stringify({
           skillName: "scripts",
@@ -175,13 +174,13 @@ describe("skills", () => {
       ),
     ).resolves.toBe("stdout:\nstdout:one\n\n\nstderr:\nstderr:two\n");
     await expect(
-      server.callTool(
+      registry.callTool(
         "run_skill_script",
         JSON.stringify({ skillName: "scripts", scriptPath: "fail.sh" }),
       ),
     ).rejects.toThrow("Skill script exited with code 2");
     await expect(
-      server.callTool(
+      registry.callTool(
         "run_skill_script",
         JSON.stringify({ skillName: "scripts", scriptPath: "slow.sh", timeoutMs: 50 }),
       ),
@@ -195,10 +194,10 @@ describe("skills", () => {
       referenceFiles: { "guide.md": "Reference text" },
     });
     const skillSet = await loadSkills(skill.local(root));
-    const server = new ToolServer().tools(skillSet.tools).run();
+    const registry = new ToolRegistry().addTools(skillSet.tools);
 
     await expect(
-      server.callTool(
+      registry.callTool(
         "get_skill_reference",
         JSON.stringify({ skillName: "review", referencePath: "../SKILL.md" }),
       ),
