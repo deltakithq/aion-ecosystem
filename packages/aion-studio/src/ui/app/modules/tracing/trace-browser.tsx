@@ -1,16 +1,10 @@
-import { useState } from "react";
-import type { StudioConfig, StudioSessionSummary, StudioTrace } from "../../../../types";
+import { ArrowLeft } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import type { StudioConfig, StudioTrace } from "../../../../types";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { ScrollArea } from "../../components/ui/scroll-area";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../../components/ui/select";
 import { cn } from "../../lib/utils";
 import {
   emptyFallback,
@@ -19,33 +13,22 @@ import {
   formatTraceDate,
   formatTraceTime,
   formatUsage,
-  toTraceStatusFilter,
   traceAgentLabel,
 } from "../shared/format";
 import { isRecord } from "../shared/object";
 import { messageText } from "../shared/transcript";
-import type {
-  TraceInspectorKey,
-  TraceLoadState,
-  TraceObservationItem,
-  TraceStatusFilter,
-} from "../shared/types";
+import type { TraceInspectorKey, TraceLoadState, TraceObservationItem } from "../shared/types";
 
 export function TraceBrowser(props: {
   agents: StudioConfig["agents"];
-  sessions: StudioSessionSummary[];
   traces: StudioTrace[];
   tracesEnabled: boolean;
   traceLoadState: TraceLoadState;
   selectedTraceId: string;
-  agentFilter: string;
-  sessionFilter: string;
-  statusFilter: TraceStatusFilter;
-  onAgentFilterChange: (agentId: string) => void;
-  onSessionFilterChange: (sessionId: string) => void;
-  onStatusFilterChange: (status: TraceStatusFilter) => void;
+  traceSessionDetailId: string | undefined;
   onRefresh: () => void;
   onSelectTrace: (traceId: string) => void;
+  onShowSessionTraces: (sessionId: string) => void;
 }) {
   if (!props.tracesEnabled) {
     return (
@@ -59,80 +42,13 @@ export function TraceBrowser(props: {
     props.selectedTraceId.length === 0
       ? undefined
       : props.traces.find((trace) => trace.id === props.selectedTraceId);
+  const selectedSessionTraces =
+    selectedTrace === undefined || props.traceSessionDetailId !== selectedTrace.sessionId
+      ? []
+      : props.traces.filter((trace) => trace.sessionId === selectedTrace.sessionId);
 
   return (
-    <section
-      className="grid h-full min-h-0 w-full grid-rows-[auto_auto_minmax(0,1fr)] content-stretch gap-4"
-      aria-label="Tracing"
-    >
-      <header className="flex min-w-0 items-center justify-between gap-4">
-        <div>
-          <p className="m-0 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground">
-            Observability
-          </p>
-          <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">Tracing</h1>
-        </div>
-        <Button size="sm" type="button" onClick={props.onRefresh}>
-          Refresh
-        </Button>
-      </header>
-      <Card className="grid gap-3 rounded-lg border-border bg-background p-3 md:grid-cols-3">
-        <div className="grid min-w-0 gap-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-normal text-muted-foreground">
-            Agent
-          </span>
-          <Select value={props.agentFilter} onValueChange={props.onAgentFilterChange}>
-            <SelectTrigger>
-              <SelectValue placeholder="All agents" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All agents</SelectItem>
-              {props.agents.map((agent) => (
-                <SelectItem value={agent.id} key={agent.id}>
-                  {agent.name ?? agent.id}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="grid min-w-0 gap-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-normal text-muted-foreground">
-            Session
-          </span>
-          <Select value={props.sessionFilter} onValueChange={props.onSessionFilterChange}>
-            <SelectTrigger>
-              <SelectValue placeholder="All sessions" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All sessions</SelectItem>
-              {props.sessions.map((session) => (
-                <SelectItem value={session.id} key={session.id}>
-                  {session.title ?? session.id}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="grid min-w-0 gap-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-normal text-muted-foreground">
-            Status
-          </span>
-          <Select
-            value={props.statusFilter}
-            onValueChange={(value) => props.onStatusFilterChange(toTraceStatusFilter(value))}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="All statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="success">Success</SelectItem>
-              <SelectItem value="error">Error</SelectItem>
-              <SelectItem value="running">Running</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </Card>
+    <section className="grid h-full min-h-0 w-full content-stretch" aria-label="Tracing">
       {props.selectedTraceId.length === 0 ? (
         <TraceTable
           agents={props.agents}
@@ -143,9 +59,11 @@ export function TraceBrowser(props: {
       ) : (
         <TraceDetailRoute
           selectedTrace={selectedTrace}
+          selectedSessionTraces={selectedSessionTraces}
           selectedTraceId={props.selectedTraceId}
           traceLoadState={props.traceLoadState}
           onBack={() => props.onSelectTrace("")}
+          onShowSessionTraces={props.onShowSessionTraces}
         />
       )}
     </section>
@@ -160,13 +78,14 @@ function TraceTable(props: {
 }) {
   return (
     <Card
-      className="min-h-0 overflow-hidden rounded-lg border-border bg-background"
+      className="min-h-0 overflow-hidden rounded-none border-x-0 border-t-0 border-border bg-card"
       aria-label="Traces"
     >
       <ScrollArea className="h-full min-h-0">
-        <div className="min-w-[960px]">
-          <div className="grid min-h-10 grid-cols-[minmax(220px,1.3fr)_120px_120px_120px_120px_110px_90px] items-center gap-4 border-b border-border px-4 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground">
+        <div className="min-w-[1120px]">
+          <div className="grid min-h-10 grid-cols-[minmax(220px,1.3fr)_150px_120px_120px_120px_120px_110px_90px] items-center gap-4 border-b border-border px-5 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground">
             <span>Trace</span>
+            <span>Session</span>
             <span>Agent</span>
             <span>Status</span>
             <span>Started</span>
@@ -175,30 +94,28 @@ function TraceTable(props: {
             <span>Events</span>
           </div>
           {props.traceLoadState === "loading" && props.traces.length === 0 ? (
-            <div className="rounded-md px-4 py-4 text-sm font-medium text-muted-foreground">
+            <div className="px-5 py-4 text-sm font-medium text-muted-foreground">
               Loading traces
             </div>
           ) : null}
           {props.traceLoadState === "idle" && props.traces.length === 0 ? (
-            <div className="rounded-md px-4 py-4 text-sm font-medium text-muted-foreground">
+            <div className="px-5 py-4 text-sm font-medium text-muted-foreground">
               No traces found
             </div>
           ) : null}
           {props.traces.map((trace) => (
             <Button
-              className="grid h-auto min-h-14 w-full grid-cols-[minmax(220px,1.3fr)_120px_120px_120px_120px_110px_90px] items-center justify-start gap-4 whitespace-normal rounded-none border-0 border-b border-border bg-transparent px-4 py-2.5 text-left text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              className="grid h-auto min-h-14 w-full grid-cols-[minmax(220px,1.3fr)_150px_120px_120px_120px_120px_110px_90px] items-center justify-start gap-4 whitespace-normal rounded-none border-0 border-b border-border bg-transparent px-5 py-2.5 text-left text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               type="button"
               variant="ghost"
               key={trace.id}
               onClick={() => props.onSelectTrace(trace.id)}
             >
-              <span className="grid min-w-0 gap-0.5">
-                <strong className="min-w-0 truncate text-sm font-medium text-foreground">
-                  {trace.name ?? "agent.run"}
-                </strong>
-                <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
-                  {trace.id}
-                </span>
+              <span className="min-w-0 truncate font-mono text-xs font-medium text-muted-foreground">
+                {trace.id}
+              </span>
+              <span className="min-w-0 truncate font-mono text-xs font-medium">
+                {trace.sessionId}
               </span>
               <span className="min-w-0 truncate text-xs font-medium">
                 {traceAgentLabel(props.agents, trace)}
@@ -231,120 +148,215 @@ function TraceTable(props: {
 
 function TraceDetailRoute(props: {
   selectedTrace: StudioTrace | undefined;
+  selectedSessionTraces: StudioTrace[];
   selectedTraceId: string;
   traceLoadState: TraceLoadState;
   onBack: () => void;
+  onShowSessionTraces: (sessionId: string) => void;
 }) {
   return (
-    <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden">
-      <div className="flex min-w-0 items-center justify-between gap-3">
+    <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
+      <header className="grid min-h-14 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-border bg-background px-5 py-3">
         <Button
-          className="h-8 min-h-8 px-3 text-xs font-medium"
+          aria-label="Back to traces"
+          className="h-8 min-h-8 w-8 text-muted-foreground hover:text-foreground"
+          size="icon"
           type="button"
-          variant="secondary"
+          variant="ghost"
           onClick={props.onBack}
         >
-          Back to traces
+          <ArrowLeft aria-hidden="true" />
         </Button>
-        <span className="min-w-0 truncate font-mono text-xs font-medium text-muted-foreground">
+        <div className="grid min-w-0 gap-1">
+          <strong className="min-w-0 truncate text-sm font-semibold text-foreground">
+            {props.selectedTrace?.name ?? "Trace detail"}
+          </strong>
+          <span className="flex min-w-0 items-center gap-2 text-xs font-medium text-muted-foreground">
+            {props.selectedTrace === undefined ? (
+              props.traceLoadState === "loading" ? (
+                "Loading trace"
+              ) : (
+                "Trace not found"
+              )
+            ) : (
+              <>
+                <span
+                  className={cn(
+                    "h-2 w-2 shrink-0 rounded-full",
+                    statusDotClass(props.selectedTrace.status),
+                  )}
+                />
+                <span className="capitalize">{props.selectedTrace.status}</span>
+                <span aria-hidden="true">/</span>
+                <span className="min-w-0 truncate">
+                  Session{" "}
+                  <span className="font-mono font-semibold">{props.selectedTrace.sessionId}</span>
+                </span>
+              </>
+            )}
+          </span>
+        </div>
+        <span className="hidden max-w-[42vw] truncate rounded-md bg-muted px-2 py-1 font-mono text-xs font-medium text-muted-foreground md:block">
           {props.selectedTraceId}
         </span>
-      </div>
+      </header>
       <div className="min-h-0 min-w-0 overflow-hidden">
         {props.selectedTrace === undefined ? (
-          <Card className="grid h-full place-items-center rounded-lg border-border bg-background p-6 text-sm font-medium text-muted-foreground">
+          <Card className="grid h-full place-items-center rounded-lg border-border bg-card p-6 text-sm font-medium text-muted-foreground">
             {props.traceLoadState === "loading" ? "Loading trace" : "Trace not found"}
           </Card>
         ) : (
-          <TracePanel traces={[props.selectedTrace]} />
+          <TracePanel
+            traces={
+              props.selectedSessionTraces.length > 0
+                ? props.selectedSessionTraces
+                : [props.selectedTrace]
+            }
+            onShowSessionTraces={props.onShowSessionTraces}
+          />
         )}
       </div>
     </div>
   );
 }
 
-function TracePanel(props: { traces: StudioTrace[] }) {
-  const orderedTraces = [...props.traces].sort(
-    (left, right) => Date.parse(left.startedAt) - Date.parse(right.startedAt),
+function TracePanel(props: {
+  traces: StudioTrace[];
+  onShowSessionTraces: (sessionId: string) => void;
+}) {
+  const orderedTraces = useMemo(
+    () =>
+      [...props.traces].sort(
+        (left, right) => Date.parse(left.startedAt) - Date.parse(right.startedAt),
+      ),
+    [props.traces],
   );
+  const firstTraceId = orderedTraces[0]?.id ?? "";
+  const [activeTraceId, setActiveTraceId] = useState(firstTraceId);
+  const [activeKey, setActiveKey] = useState<TraceInspectorKey>("trace");
+  useEffect(() => {
+    setActiveTraceId(firstTraceId);
+    setActiveKey("trace");
+  }, [firstTraceId]);
+
+  const activeTrace = orderedTraces.find((trace) => trace.id === activeTraceId) ?? orderedTraces[0];
+  const turns = activeTrace === undefined ? [] : traceTurns(activeTrace);
+  const selectTimelineItem = (traceId: string, key: TraceInspectorKey) => {
+    setActiveTraceId(traceId);
+    setActiveKey(key);
+  };
+
+  if (activeTrace === undefined) {
+    return (
+      <section
+        className="grid h-full min-h-0 w-full place-items-center text-sm font-medium text-muted-foreground"
+        aria-label="Traces"
+      >
+        No trace selected
+      </section>
+    );
+  }
+
   return (
-    <Card
-      className="grid h-full min-h-0 w-full content-stretch overflow-hidden rounded-lg border-border bg-background"
+    <section
+      className="grid h-full min-h-0 w-full content-stretch overflow-hidden"
       aria-label="Traces"
     >
-      {orderedTraces.map((trace) => (
-        <TraceEntry key={trace.id} trace={trace} />
-      ))}
-    </Card>
-  );
-}
-
-function TraceEntry(props: { trace: StudioTrace }) {
-  const [activeKey, setActiveKey] = useState<TraceInspectorKey>("trace");
-  const turns = traceTurns(props.trace);
-
-  return (
-    <article className="min-h-0 w-full text-foreground">
       <div className="grid h-full min-h-0 grid-cols-[320px_minmax(0,1fr)] overflow-hidden max-md:grid-cols-1">
         <nav
           className="grid min-h-0 auto-rows-min content-start overflow-auto border-r border-border bg-background max-md:max-h-80 max-md:border-b max-md:border-r-0"
           aria-label="Trace timeline"
         >
-          <div className="sticky top-0 z-10 flex min-h-11 items-center justify-between border-b border-border bg-background px-3 text-xs font-medium text-muted-foreground">
+          <div className="sticky top-0 z-10 flex min-h-11 items-center justify-between border-b border-border bg-background px-5 text-xs font-medium text-muted-foreground">
             <span>Search</span>
             <strong className="text-foreground">Timeline</strong>
           </div>
-          <TraceTreeRow
-            active={activeKey === "trace"}
-            tone="trace"
-            title={props.trace.name ?? "support-ticket-summary"}
-            subtitle={formatDuration(props.trace.durationMs)}
-            onSelect={() => setActiveKey("trace")}
-          />
-          <TraceTreeRow
-            active={activeKey === "agent"}
-            tone="agent"
-            title="agent.run"
-            subtitle={formatDuration(props.trace.durationMs)}
-            onSelect={() => setActiveKey("agent")}
-          />
-          {turns.map((turn) => (
-            <div className="contents" key={turn.turn}>
-              <TraceTreeRow
-                active={activeKey === `turn:${turn.turn}`}
-                tone="turn"
-                title={`turn.${turn.turn}`}
-                subtitle={formatDuration(turn.durationMs)}
-                onSelect={() => setActiveKey(`turn:${turn.turn}`)}
-              />
-              {turn.observations.map((observation) => {
-                const usageText = observationUsageText(observation);
-                return (
-                  <TraceTreeRow
-                    active={activeKey === `observation:${observation.id}`}
-                    tone={observation.kind}
-                    title={traceObservationLabel(observation)}
-                    subtitle={
-                      usageText.length > 0
-                        ? `${formatDuration(observation.durationMs)} · ${usageText}`
-                        : formatDuration(observation.durationMs)
-                    }
-                    onSelect={() => setActiveKey(`observation:${observation.id}`)}
-                    key={observation.id}
-                  />
-                );
-              })}
-            </div>
-          ))}
+          {orderedTraces.map((trace) => {
+            const traceActive = activeTrace.id === trace.id;
+            const traceTurnItems = traceTurns(trace);
+            return (
+              <div className="contents" key={trace.id}>
+                <TraceTreeRow
+                  active={traceActive && activeKey === "trace"}
+                  ancestorLevels={[]}
+                  hasChildren={true}
+                  isLastSibling={true}
+                  level={0}
+                  tone="trace"
+                  title={trace.name ?? "support-ticket-summary"}
+                  subtitle={formatDuration(trace.durationMs)}
+                  onSelect={() => selectTimelineItem(trace.id, "trace")}
+                />
+                <TraceTreeRow
+                  active={traceActive && activeKey === "agent"}
+                  ancestorLevels={[]}
+                  hasChildren={traceTurnItems.length > 0}
+                  isLastSibling={true}
+                  level={1}
+                  tone="agent"
+                  title="agent.run"
+                  subtitle={formatDuration(trace.durationMs)}
+                  onSelect={() => selectTimelineItem(trace.id, "agent")}
+                />
+                {traceTurnItems.map((turn) => (
+                  <div className="contents" key={`${trace.id}:turn:${turn.turn}`}>
+                    <TraceTreeRow
+                      active={traceActive && activeKey === `turn:${turn.turn}`}
+                      ancestorLevels={[]}
+                      hasChildren={turn.observations.length > 0}
+                      isLastSibling={turn.turn === traceTurnItems.at(-1)?.turn}
+                      level={2}
+                      tone="turn"
+                      title={`turn.${turn.turn}`}
+                      subtitle={formatDuration(turn.durationMs)}
+                      onSelect={() => selectTimelineItem(trace.id, `turn:${turn.turn}`)}
+                    />
+                    {turn.observations.map((observation) => {
+                      const usageText = observationUsageText(observation);
+                      return (
+                        <TraceTreeRow
+                          active={traceActive && activeKey === `observation:${observation.id}`}
+                          ancestorLevels={turn.turn === traceTurnItems.at(-1)?.turn ? [] : [1]}
+                          hasChildren={false}
+                          isLastSibling={observation.id === turn.observations.at(-1)?.id}
+                          level={3}
+                          tone={observation.kind}
+                          title={traceObservationLabel(observation)}
+                          subtitle={
+                            usageText.length > 0
+                              ? `${formatDuration(observation.durationMs)} · ${usageText}`
+                              : formatDuration(observation.durationMs)
+                          }
+                          onSelect={() =>
+                            selectTimelineItem(trace.id, `observation:${observation.id}`)
+                          }
+                          key={observation.id}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </nav>
-        <TraceDetailPane trace={props.trace} turns={turns} activeKey={activeKey} />
+        <TraceDetailPane
+          trace={activeTrace}
+          turns={turns}
+          activeKey={activeKey}
+          onShowSessionTraces={props.onShowSessionTraces}
+        />
       </div>
-    </article>
+    </section>
   );
 }
 
 function TraceTreeRow(props: {
   active: boolean;
+  ancestorLevels: number[];
+  hasChildren: boolean;
+  isLastSibling: boolean;
+  level: number;
   tone: "trace" | "agent" | "turn" | StudioTrace["observations"][number]["kind"];
   title: string;
   subtitle: string;
@@ -353,15 +365,59 @@ function TraceTreeRow(props: {
   return (
     <Button
       className={cn(
-        "grid h-auto min-h-0 w-full min-w-0 grid-cols-[18px_minmax(0,1fr)] items-start justify-start gap-2 whitespace-normal rounded-none border-0 bg-transparent px-3 py-2 text-left text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-        props.active && "bg-muted text-foreground",
+        "relative grid h-auto min-h-0 w-full min-w-0 grid-cols-[18px_minmax(0,1fr)] items-start justify-start gap-2 whitespace-normal rounded-none border-0 bg-transparent px-3 py-2 text-left text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+        props.active && "bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary",
       )}
       type="button"
       variant="ghost"
       onClick={props.onSelect}
+      style={{ paddingLeft: `${12 + props.level * 18}px` }}
     >
+      {props.ancestorLevels.map((level) => (
+        <span
+          className="pointer-events-none absolute inset-y-0 w-px bg-border/70"
+          style={{ left: `${17 + level * 18}px` }}
+          aria-hidden="true"
+          key={`ancestor-line-${level}`}
+        />
+      ))}
+      {props.level > 0 ? (
+        <>
+          <span
+            className="pointer-events-none absolute top-0 h-[19px] w-px bg-border"
+            style={{ left: `${17 + (props.level - 1) * 18}px` }}
+            aria-hidden="true"
+          />
+          {props.isLastSibling ? null : (
+            <span
+              className="pointer-events-none absolute bottom-0 top-[19px] w-px bg-border"
+              style={{ left: `${17 + (props.level - 1) * 18}px` }}
+              aria-hidden="true"
+            />
+          )}
+          <span
+            className="pointer-events-none absolute h-px bg-border"
+            style={{
+              left: `${17 + (props.level - 1) * 18}px`,
+              top: "19px",
+              width: "18px",
+            }}
+            aria-hidden="true"
+          />
+        </>
+      ) : null}
+      {props.hasChildren ? (
+        <span
+          className="pointer-events-none absolute bottom-0 top-[19px] w-px bg-border"
+          style={{ left: `${17 + props.level * 18}px` }}
+          aria-hidden="true"
+        />
+      ) : null}
       <span
-        className={cn("mt-1.5 h-2.5 w-2.5 rounded-full border", traceToneDotClass(props.tone))}
+        className={cn(
+          "relative z-20 mt-1.5 h-2.5 w-2.5 rounded-full shadow-[0_0_0_3px_hsl(var(--background))]",
+          traceToneDotClass(props.tone),
+        )}
       />
       <span className="grid min-w-0 gap-0.5">
         <strong className="min-w-0 truncate text-sm font-medium leading-5 text-current">
@@ -379,6 +435,7 @@ function TraceDetailPane(props: {
   trace: StudioTrace;
   turns: Array<{ turn: number; observations: TraceObservationItem[]; durationMs?: number }>;
   activeKey: TraceInspectorKey;
+  onShowSessionTraces: (sessionId: string) => void;
 }) {
   const selected = selectedTraceDetail(props.trace, props.turns, props.activeKey);
   return (
@@ -404,7 +461,15 @@ function TraceDetailPane(props: {
           {selected.firstDeltaMs === undefined ? null : (
             <Badge>First delta: {formatDuration(selected.firstDeltaMs)}</Badge>
           )}
-          <Badge>Env: default</Badge>
+          <Button
+            className="h-auto min-h-0 max-w-full rounded-md border border-border bg-muted px-2 py-1 font-mono text-xs font-semibold text-foreground hover:bg-accent hover:text-accent-foreground"
+            type="button"
+            variant="ghost"
+            onClick={() => props.onShowSessionTraces(props.trace.sessionId)}
+          >
+            <span className="font-sans">SessionID:</span>
+            <span className="min-w-0 truncate">{props.trace.sessionId}</span>
+          </Button>
           {selected.usage.length > 0 ? <Badge>{selected.usage}</Badge> : null}
         </div>
       </header>
@@ -431,7 +496,7 @@ function TraceDataSection(props: { title: string; value: unknown; tone?: "succes
       <h3 className="m-0 text-base font-semibold leading-tight text-foreground">{props.title}</h3>
       <div
         className={cn(
-          "overflow-hidden rounded-lg border border-border bg-background",
+          "overflow-hidden rounded-lg border border-border bg-card",
           props.tone === "success" && "border-primary/40 bg-primary/10",
           props.tone === "error" && "border-destructive/40 bg-destructive/10",
         )}
@@ -488,7 +553,7 @@ function plainTraceValue(title: string, value: unknown): Array<{ label: string; 
 
 function plainTraceInput(value: unknown): Array<{ label: string; text: string }> {
   if (typeof value === "string") {
-    return [{ label: "Input", text: value }];
+    return [{ label: "Value", text: value }];
   }
   if (Array.isArray(value)) {
     return value
@@ -504,7 +569,9 @@ function plainTraceInput(value: unknown): Array<{ label: string; text: string }>
 
   const chatHistory = Array.isArray(value.chatHistory) ? value.chatHistory : undefined;
   if (chatHistory !== undefined) {
-    return plainTraceInput(chatHistory);
+    const rows = systemPromptRows(value);
+    rows.push(...plainTraceInput(chatHistory));
+    return rows;
   }
 
   if (Array.isArray(value.prompt)) {
@@ -512,17 +579,27 @@ function plainTraceInput(value: unknown): Array<{ label: string; text: string }>
   }
 
   const rows: Array<{ label: string; text: string }> = [];
-  const promptText = messageText(value.prompt);
-  if (promptText.length > 0) {
-    rows.push({ label: "Prompt", text: promptText });
-  }
+  rows.push(...systemPromptRows(value));
 
   const history = Array.isArray(value.history) ? value.history : [];
   if (history.length > 0) {
     rows.push(...plainTraceInput(history));
   }
 
+  const promptText = messageText(value.prompt);
+  if (promptText.length > 0) {
+    rows.push({ label: history.length > 0 ? "Current prompt" : "Prompt", text: promptText });
+  }
+
   return rows;
+}
+
+function systemPromptRows(value: Record<string, unknown>): Array<{ label: string; text: string }> {
+  const instructions = value.instructions;
+  if (typeof instructions !== "string" || instructions.trim().length === 0) {
+    return [];
+  }
+  return [{ label: "System prompt", text: instructions }];
 }
 
 function plainTraceText(value: unknown): string {
@@ -690,15 +767,15 @@ function traceToneDotClass(
 ): string {
   switch (tone) {
     case "trace":
-      return "border-primary bg-primary/20";
+      return "bg-primary";
     case "agent":
-      return "border-chart-2 bg-chart-2/20";
+      return "bg-chart-2";
     case "turn":
-      return "border-chart-4 bg-chart-4/20";
+      return "bg-chart-4";
     case "generation":
-      return "border-chart-1 bg-chart-1/20";
+      return "bg-chart-1";
     case "tool":
-      return "border-chart-5 bg-chart-5/20";
+      return "bg-chart-5";
   }
 }
 

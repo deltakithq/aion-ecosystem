@@ -181,6 +181,7 @@ class StudioRunTraceObserver implements AgentRunObserver {
       endedAt: result.endedAt.toISOString(),
       durationMs: durationMs(this.startedAt, result.endedAt),
       input: toJsonValue({
+        instructions: this.props.args.instructions,
         prompt: this.props.args.prompt,
         history: this.props.args.history,
       }),

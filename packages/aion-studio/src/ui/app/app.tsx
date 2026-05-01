@@ -1,4 +1,4 @@
-import { ArrowUp, Plus, Trash2 } from "lucide-react";
+import { ArrowUp, Moon, Plus, Sun, Trash2 } from "lucide-react";
 import {
   type ChangeEvent,
   type KeyboardEvent,
@@ -43,6 +43,7 @@ import {
   updatePagePath,
   updateSessionPath,
   updateTracePath,
+  updateTraceSessionPath,
 } from "./modules/shared/path";
 import {
   findMatchingToolIndex,
@@ -63,13 +64,33 @@ import type {
   SessionLoadState,
   ToolApprovalUpdate,
   TraceLoadState,
-  TraceStatusFilter,
   TranscriptEntry,
 } from "./modules/shared/types";
 import { NavButton } from "./modules/shell/nav-button";
 import { TraceBrowser } from "./modules/tracing/trace-browser";
 
+type ThemeMode = "dark" | "light";
+
+const themeStorageKey = "aion-studio-theme";
+
+function readStoredTheme(): ThemeMode {
+  if (typeof window === "undefined") {
+    return "dark";
+  }
+
+  try {
+    return window.localStorage.getItem(themeStorageKey) === "light" ? "light" : "dark";
+  } catch {
+    return "dark";
+  }
+}
+
+function applyTheme(theme: ThemeMode): void {
+  document.documentElement.classList.toggle("dark", theme === "dark");
+}
+
 export function StudioConsole() {
+  const initialLocation = pageLocationFromLocation();
   const [config, setConfig] = useState<StudioConfig | undefined>();
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState("");
@@ -77,17 +98,16 @@ export function StudioConsole() {
   const [traces, setTraces] = useState<StudioTrace[]>([]);
   const [messages, setMessages] = useState<TranscriptEntry[]>([]);
   const [prompt, setPrompt] = useState("");
-  const [activePage, setActivePage] = useState<ActivePage>(() => pageLocationFromLocation().page);
-  const [selectedTraceId, setSelectedTraceId] = useState(
-    () => pageLocationFromLocation().traceId ?? "",
+  const [activePage, setActivePage] = useState<ActivePage>(() => initialLocation.page);
+  const [selectedTraceId, setSelectedTraceId] = useState(() => initialLocation.traceId ?? "");
+  const [traceSessionDetailId, setTraceSessionDetailId] = useState<string | undefined>(
+    () => initialLocation.traceSessionId,
   );
-  const [traceAgentFilter, setTraceAgentFilter] = useState("all");
-  const [traceSessionFilter, setTraceSessionFilter] = useState("all");
-  const [traceStatusFilter, setTraceStatusFilter] = useState<TraceStatusFilter>("all");
   const [deleteCandidate, setDeleteCandidate] = useState<StudioSessionSummary | undefined>();
   const [status, setStatus] = useState("Loading");
   const [error, setError] = useState("");
   const [runState, setRunState] = useState<RunState>("idle");
+  const [theme, setTheme] = useState<ThemeMode>(() => readStoredTheme());
   const [decidingApprovals, setDecidingApprovals] = useState<Set<string>>(() => new Set());
   const [sessionLoadState, setSessionLoadState] = useState<SessionLoadState>("idle");
   const [traceLoadState, setTraceLoadState] = useState<TraceLoadState>("idle");
@@ -122,6 +142,13 @@ export function StudioConsole() {
 
   const sessionsEnabled = config?.capabilities.sessions?.enabled === true;
   const tracesEnabled = config?.capabilities.traces?.enabled === true;
+
+  useEffect(() => {
+    applyTheme(theme);
+    try {
+      window.localStorage.setItem(themeStorageKey, theme);
+    } catch {}
+  }, [theme]);
 
   const loadAllSessions = useCallback(async () => {
     if (!sessionsEnabled) {
@@ -178,16 +205,6 @@ export function StudioConsole() {
     setTraceLoadState("loading");
     try {
       const params = new URLSearchParams({ limit: "50" });
-      if (traceAgentFilter !== "all") {
-        params.set("agentId", traceAgentFilter);
-      }
-      if (traceSessionFilter !== "all") {
-        params.set("sessionId", traceSessionFilter);
-      }
-      if (traceStatusFilter !== "all") {
-        params.set("status", traceStatusFilter);
-      }
-
       const response = await fetch(`/traces?${params.toString()}`);
       if (!response.ok) {
         throw new Error(`Traces failed with HTTP ${response.status}`);
@@ -215,14 +232,82 @@ export function StudioConsole() {
     } finally {
       setTraceLoadState("idle");
     }
-  }, [selectedTraceId, traceAgentFilter, traceSessionFilter, traceStatusFilter, tracesEnabled]);
+  }, [selectedTraceId, tracesEnabled]);
+
+  const showSessionTraces = useCallback(
+    async (sessionId: string, options: { updatePath?: boolean } = {}) => {
+      if (!tracesEnabled) {
+        return;
+      }
+
+      setTraceLoadState("loading");
+      try {
+        const params = new URLSearchParams({ limit: "50", sessionId });
+        const response = await fetch(`/traces?${params.toString()}`);
+        if (!response.ok) {
+          throw new Error(`Session traces failed with HTTP ${response.status}`);
+        }
+        const body = (await response.json()) as { traces: StudioTraceSummary[] };
+        const loaded = await Promise.all(
+          body.traces.map(async (trace) => {
+            const traceResponse = await fetch(`/traces/${encodeURIComponent(trace.id)}`);
+            if (!traceResponse.ok) {
+              throw new Error(`Trace load failed with HTTP ${traceResponse.status}`);
+            }
+            return (await traceResponse.json()) as StudioTrace;
+          }),
+        );
+        const ordered = [...loaded].sort(
+          (left, right) => Date.parse(left.startedAt) - Date.parse(right.startedAt),
+        );
+        setTraces(ordered);
+        const firstTraceId = ordered[0]?.id;
+        if (firstTraceId === undefined) {
+          setSelectedTraceId("");
+          setTraceSessionDetailId(sessionId);
+          if (options.updatePath !== false) {
+            updateTraceSessionPath(sessionId);
+          }
+          return;
+        }
+        setActivePage("tracing");
+        setSelectedTraceId(firstTraceId);
+        setTraceSessionDetailId(sessionId);
+        if (options.updatePath !== false) {
+          updateTraceSessionPath(sessionId);
+        }
+      } catch (loadError) {
+        setError(errorMessage(loadError));
+      } finally {
+        setTraceLoadState("idle");
+      }
+    },
+    [tracesEnabled],
+  );
+
+  const loadSessionTraceSummaries = useCallback(
+    async (sessionId: string): Promise<StudioTraceSummary[]> => {
+      if (!tracesEnabled) {
+        return [];
+      }
+
+      const params = new URLSearchParams({ limit: "100" });
+      const response = await fetch(`/sessions/${encodeURIComponent(sessionId)}/traces?${params}`);
+      if (!response.ok) {
+        return [];
+      }
+      const body = (await response.json()) as { traces: StudioTraceSummary[] };
+      return body.traces;
+    },
+    [tracesEnabled],
+  );
 
   useEffect(() => {
-    if (activePage !== "tracing") {
+    if (activePage !== "tracing" || traceSessionDetailId !== undefined) {
       return;
     }
     void loadTraces();
-  }, [activePage, loadTraces]);
+  }, [activePage, loadTraces, traceSessionDetailId]);
 
   const loadSession = useCallback(
     async (sessionId: string, options: { updatePath?: boolean } = {}) => {
@@ -238,10 +323,11 @@ export function StudioConsole() {
           throw new Error(`Session load failed with HTTP ${response.status}`);
         }
         const session = (await response.json()) as StudioSession;
+        const traceSummaries = await loadSessionTraceSummaries(session.id);
         setTranscriptSequence(nextSequence(session.transcript));
         setSelectedAgentId(session.agentId);
         setSelectedSessionId(session.id);
-        setMessages(session.transcript);
+        setMessages(enrichTranscriptWithTraceIds(session.transcript, traceSummaries));
         if (options.updatePath !== false) {
           setActivePage("playground");
           updateSessionPath(session.id);
@@ -253,7 +339,7 @@ export function StudioConsole() {
         setSessionLoadState("idle");
       }
     },
-    [runState],
+    [runState, loadSessionTraceSummaries],
   );
 
   const startNewChat = useCallback(
@@ -310,9 +396,6 @@ export function StudioConsole() {
 
       setAllSessions((current) => current.filter((item) => item.id !== session.id));
       setTraces((current) => current.filter((trace) => trace.sessionId !== session.id));
-      if (traceSessionFilter === session.id) {
-        setTraceSessionFilter("all");
-      }
       if (selectedSessionId === session.id) {
         resetTranscriptSequence();
         setSelectedSessionId("");
@@ -338,6 +421,11 @@ export function StudioConsole() {
     const location = pageLocationFromLocation();
     setActivePage(location.page);
     setSelectedTraceId(location.traceId ?? "");
+    setTraceSessionDetailId(location.traceSessionId);
+    if (location.page === "tracing" && location.traceSessionId !== undefined) {
+      void showSessionTraces(location.traceSessionId, { updatePath: false });
+      return;
+    }
     if (
       location.page !== "playground" ||
       location.sessionId === undefined ||
@@ -346,13 +434,18 @@ export function StudioConsole() {
       return;
     }
     void loadSession(location.sessionId, { updatePath: false });
-  }, [selectedSessionId, sessionsEnabled, loadSession]);
+  }, [selectedSessionId, sessionsEnabled, loadSession, showSessionTraces]);
 
   useEffect(() => {
     function handlePopState() {
       const location = pageLocationFromLocation();
       setActivePage(location.page);
       setSelectedTraceId(location.traceId ?? "");
+      setTraceSessionDetailId(location.traceSessionId);
+      if (location.page === "tracing" && location.traceSessionId !== undefined) {
+        void showSessionTraces(location.traceSessionId, { updatePath: false });
+        return;
+      }
       if (location.page !== "playground") {
         return;
       }
@@ -365,7 +458,7 @@ export function StudioConsole() {
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [loadSession, startNewChat]);
+  }, [loadSession, showSessionTraces, startNewChat]);
 
   async function runPrompt(text: string) {
     const trimmed = text.trim();
@@ -421,6 +514,8 @@ export function StudioConsole() {
       await loadAllSessions();
       if (sessionId.length > 0) {
         setSelectedSessionId(sessionId);
+        const traceSummaries = await loadSessionTraceSummaries(sessionId);
+        setMessages((current) => enrichTranscriptWithTraceIds(current, traceSummaries));
       }
       setStatus("Connected");
     } catch (runError) {
@@ -466,6 +561,10 @@ export function StudioConsole() {
       updateToolApproval(event.approval);
       return true;
     }
+    if (event.type === "final" && event.trace?.traceId !== undefined) {
+      assignAssistantTraceId(event.trace.traceId);
+      return true;
+    }
     if (event.type === "error") {
       setError(JSON.stringify(event.error));
     }
@@ -485,6 +584,20 @@ export function StudioConsole() {
           role: "assistant",
           text: delta,
         });
+      }
+      return next;
+    });
+  }
+
+  function assignAssistantTraceId(traceId: string) {
+    setMessages((current) => {
+      const next = [...current];
+      for (let index = next.length - 1; index >= 0; index -= 1) {
+        const entry = next[index];
+        if (entry?.kind === "message" && entry.role === "assistant") {
+          next[index] = { ...entry, traceId };
+          break;
+        }
       }
       return next;
     });
@@ -639,16 +752,17 @@ export function StudioConsole() {
   const selectedAgent =
     agents.find((agent) => agent.id === selectedAgentId) ?? agents[0] ?? undefined;
   const hasMessages = messages.length > 0;
-  const filteredTraceSessions =
-    traceAgentFilter === "all"
-      ? allSessions
-      : allSessions.filter((session) => session.agentId === traceAgentFilter);
 
   function navigatePage(page: ActivePage) {
     setActivePage(page);
-    if (page !== "tracing") {
+    if (page === "tracing") {
       setSelectedTraceId("");
+      setTraceSessionDetailId(undefined);
+      updatePagePath("tracing");
+      return;
     }
+    setSelectedTraceId("");
+    setTraceSessionDetailId(undefined);
     if (page === "playground" && selectedSessionId.length > 0) {
       updateSessionPath(selectedSessionId);
       return;
@@ -657,7 +771,9 @@ export function StudioConsole() {
   }
 
   function selectTrace(traceId: string) {
+    setActivePage("tracing");
     setSelectedTraceId(traceId);
+    setTraceSessionDetailId(undefined);
     if (traceId.length === 0) {
       updatePagePath("tracing");
       return;
@@ -675,7 +791,7 @@ export function StudioConsole() {
           </span>
           <Button
             aria-label="New chat"
-            className="h-8 min-h-8 w-8 border-sidebar-border bg-sidebar text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            className="h-8 min-h-8 w-8 border-sidebar-border bg-transparent text-sidebar-foreground/70 hover:bg-accent hover:text-sidebar-foreground"
             size="icon"
             variant="ghost"
             type="button"
@@ -735,8 +851,9 @@ export function StudioConsole() {
                     <div
                       key={session.id}
                       className={cn(
-                        "group grid h-8 min-h-8 w-full min-w-0 grid-cols-[minmax(0,1fr)_2rem] items-center gap-2 rounded-md border border-transparent px-2 text-muted-foreground",
-                        session.id === selectedSessionId && "bg-muted text-foreground",
+                        "group grid h-8 min-h-8 w-full min-w-0 grid-cols-[minmax(0,1fr)_2rem] items-center gap-2 rounded-md border border-transparent px-2 text-muted-foreground hover:bg-accent hover:text-foreground",
+                        session.id === selectedSessionId &&
+                          "border-primary/10 bg-primary/10 text-primary",
                       )}
                     >
                       <Button
@@ -778,18 +895,28 @@ export function StudioConsole() {
       </aside>
 
       <main className="grid h-screen min-w-0 grid-rows-[56px_minmax(0,1fr)_auto] overflow-hidden bg-background">
-        <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border bg-background px-5">
+        <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border bg-background/95 px-5">
           <div className="min-w-0 truncate text-sm font-semibold text-foreground">
             {pageTitle(activePage, selectedAgent?.name ?? selectedAgent?.id)}
           </div>
           <div className="flex min-w-0 items-center justify-end gap-2">
+            <Button
+              aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+              className="h-8 min-h-8 w-8"
+              size="icon"
+              type="button"
+              variant="ghost"
+              onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+            >
+              {theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
+            </Button>
             <Badge
               className={cn(
                 "min-h-7 max-w-[min(42vw,480px)] gap-2 overflow-hidden truncate rounded-md px-2.5 py-1 text-xs",
                 error.length > 0
                   ? "border-destructive/40 bg-destructive/15 text-destructive"
                   : status === "Connected"
-                    ? "border-emerald-500/35 bg-emerald-500/15 text-emerald-100"
+                    ? "border-primary/35 bg-primary/15 text-primary"
                     : "border-border bg-muted text-foreground",
               )}
               variant={error.length > 0 ? "destructive" : "default"}
@@ -798,7 +925,7 @@ export function StudioConsole() {
                 <span
                   className={cn(
                     "h-2 w-2 shrink-0 rounded-full",
-                    status === "Connected" ? "bg-emerald-300" : "bg-primary",
+                    status === "Connected" ? "bg-primary" : "bg-muted-foreground",
                   )}
                   aria-hidden="true"
                 />
@@ -832,6 +959,7 @@ export function StudioConsole() {
                     onApprovalDecision={(approvalId, approved) =>
                       void decideToolApproval(approvalId, approved)
                     }
+                    onOpenTrace={selectTrace}
                   />
                 ))}
               </div>
@@ -840,31 +968,23 @@ export function StudioConsole() {
         ) : null}
 
         {activePage === "tracing" ? (
-          <section className="grid min-h-0 overflow-hidden bg-background p-6">
+          <section className="grid min-h-0 overflow-hidden bg-background">
             <TraceBrowser
               agents={agents}
-              sessions={filteredTraceSessions}
               traces={traces}
               tracesEnabled={tracesEnabled}
               traceLoadState={traceLoadState}
               selectedTraceId={selectedTraceId}
-              agentFilter={traceAgentFilter}
-              sessionFilter={traceSessionFilter}
-              statusFilter={traceStatusFilter}
-              onAgentFilterChange={(agentId) => {
-                setTraceAgentFilter(agentId);
-                setTraceSessionFilter("all");
-              }}
-              onSessionFilterChange={setTraceSessionFilter}
-              onStatusFilterChange={setTraceStatusFilter}
+              traceSessionDetailId={traceSessionDetailId}
               onRefresh={() => void loadTraces()}
               onSelectTrace={selectTrace}
+              onShowSessionTraces={(sessionId) => void showSessionTraces(sessionId)}
             />
           </section>
         ) : null}
 
         {activePage === "sessions" ? (
-          <section className="grid min-h-0 overflow-hidden bg-background p-6">
+          <section className="grid min-h-0 overflow-hidden bg-background">
             <SessionsPage
               agents={agents}
               sessions={allSessions}
@@ -878,20 +998,20 @@ export function StudioConsole() {
         ) : null}
 
         {activePage === "agents" ? (
-          <section className="grid min-h-0 overflow-hidden bg-background p-6">
+          <section className="grid min-h-0 overflow-hidden bg-background">
             <AgentsPage agents={agents} selectedAgentId={selectedAgentId} />
           </section>
         ) : null}
 
         {activePage === "playground" ? (
           <form
-            className="bg-background px-6 py-4"
+            className="border-t border-border bg-background px-6 py-4"
             onSubmit={(event) => {
               event.preventDefault();
               void runPrompt(prompt);
             }}
           >
-            <div className="mx-auto grid min-h-24 w-full max-w-[900px] gap-3 rounded-lg border border-border bg-background p-3 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20">
+            <div className="mx-auto grid min-h-24 w-full max-w-[900px] gap-3 rounded-lg border border-border bg-card p-3 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20">
               <Textarea
                 className="min-w-0 rounded-none border-0 bg-transparent p-0 text-sm text-foreground shadow-none outline-none ring-0 focus:border-transparent focus:ring-0"
                 ref={promptRef}
@@ -927,7 +1047,7 @@ export function StudioConsole() {
                 )}
                 <Button
                   aria-label={runState === "running" ? "Running" : "Send message"}
-                  className="h-8 min-h-8 w-8 rounded-md border-border bg-primary p-0 text-primary-foreground hover:bg-primary/90 [&_svg]:h-4 [&_svg]:w-4"
+                  className="h-8 min-h-8 w-8 rounded-md border-primary bg-primary p-0 text-primary-foreground hover:bg-primary/90 [&_svg]:h-4 [&_svg]:w-4"
                   size="icon"
                   type="submit"
                   disabled={runState === "running" || selectedAgentId.length === 0}
@@ -950,4 +1070,49 @@ export function StudioConsole() {
       />
     </div>
   );
+}
+
+function enrichTranscriptWithTraceIds(
+  transcript: TranscriptEntry[],
+  traceSummaries: StudioTraceSummary[],
+): TranscriptEntry[] {
+  const sortedTraceIds = [...traceSummaries]
+    .sort((left, right) => Date.parse(left.startedAt) - Date.parse(right.startedAt))
+    .map((trace) => trace.id);
+  let traceIndex = 0;
+  let pendingAssistantIndex: number | undefined;
+  const next = transcript.map((entry) =>
+    entry.kind === "message" && entry.role === "assistant" ? withoutTraceId(entry) : entry,
+  );
+
+  function assignPendingTraceId() {
+    if (pendingAssistantIndex === undefined) {
+      return;
+    }
+    const traceId = sortedTraceIds[traceIndex];
+    traceIndex += 1;
+    if (traceId !== undefined) {
+      const entry = next[pendingAssistantIndex];
+      next[pendingAssistantIndex] = { ...entry, traceId } as TranscriptEntry;
+    }
+    pendingAssistantIndex = undefined;
+  }
+
+  for (const [index, entry] of next.entries()) {
+    if (entry.kind === "message" && entry.role === "user") {
+      assignPendingTraceId();
+      continue;
+    }
+    if (entry.kind === "message" && entry.role === "assistant") {
+      pendingAssistantIndex = index;
+    }
+  }
+  assignPendingTraceId();
+
+  return next;
+}
+
+function withoutTraceId(entry: Extract<TranscriptEntry, { kind: "message" }>): TranscriptEntry {
+  const { traceId: _traceId, ...rest } = entry;
+  return rest;
 }

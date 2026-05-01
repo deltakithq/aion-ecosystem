@@ -10,6 +10,7 @@ export function TranscriptItem(props: {
   entry: TranscriptEntry;
   decidingApprovals: Set<string>;
   onApprovalDecision: (approvalId: string, approved: boolean) => void;
+  onOpenTrace: (traceId: string) => void;
 }) {
   if (props.entry.kind === "reasoning") {
     return (
@@ -33,17 +34,30 @@ export function TranscriptItem(props: {
     );
   }
 
+  const traceId = props.entry.role === "assistant" ? props.entry.traceId : undefined;
+
   return (
     <article
       className={cn(
         "max-w-[min(78ch,100%)] self-start",
         props.entry.role === "assistant" && "justify-self-start text-foreground",
         props.entry.role === "user" &&
-          "w-fit max-w-[min(64ch,82%)] justify-self-end rounded-lg border border-border bg-muted px-3 py-2 text-foreground",
+          "w-fit max-w-[min(64ch,82%)] justify-self-end rounded-lg border border-primary/10 bg-primary/10 px-3 py-2 text-foreground",
       )}
       data-entry-id={String(props.entry.entryId)}
     >
       <MarkdownText text={props.entry.text} />
+      {traceId !== undefined ? (
+        <Button
+          className="mt-3 h-auto min-h-0 max-w-full rounded-md border border-border bg-muted px-2 py-1 font-mono text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          type="button"
+          variant="ghost"
+          onClick={() => props.onOpenTrace(traceId)}
+        >
+          <span className="font-sans">TraceID:</span>
+          <span className="min-w-0 truncate">{traceId}</span>
+        </Button>
+      ) : null}
     </article>
   );
 }
@@ -62,7 +76,7 @@ function ToolEntry(props: {
 
   return (
     <article
-      className="w-full max-w-[min(760px,100%)] justify-self-start rounded-lg border border-border bg-background p-3 text-foreground"
+      className="w-full max-w-[min(760px,100%)] justify-self-start rounded-lg border border-border bg-card p-3 text-foreground"
       data-entry-id={String(props.entry.entryId)}
     >
       <div className="flex min-w-0 items-center gap-3">
@@ -74,7 +88,7 @@ function ToolEntry(props: {
           onClick={() => setCollapsed((current) => !current)}
         >
           <span className="flex min-w-0 items-center gap-2">
-            <Badge className="rounded-md border-border bg-muted px-2 py-1 text-[11px] uppercase text-foreground">
+            <Badge className="rounded-md border-primary/25 bg-primary/10 px-2 py-1 text-[11px] uppercase text-primary">
               Tool call
             </Badge>
             <strong className="[overflow-wrap:anywhere] text-sm font-semibold text-foreground">

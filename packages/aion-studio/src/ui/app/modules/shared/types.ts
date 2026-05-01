@@ -19,4 +19,5 @@ export type PageLocation = {
   page: ActivePage;
   sessionId?: string;
   traceId?: string;
+  traceSessionId?: string;
 };

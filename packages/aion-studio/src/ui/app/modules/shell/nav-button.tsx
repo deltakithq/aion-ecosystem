@@ -12,8 +12,9 @@ export function NavButton(props: {
   return (
     <Button
       className={cn(
-        "h-8 min-h-8 w-full justify-start gap-2 rounded-md border-transparent bg-transparent px-2.5 text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&_svg]:h-4 [&_svg]:w-4",
-        props.active && "bg-sidebar-accent text-sidebar-accent-foreground",
+        "h-8 min-h-8 w-full justify-start gap-2 rounded-md border-transparent bg-transparent px-2.5 text-sm font-medium text-sidebar-foreground/70 hover:bg-accent hover:text-sidebar-foreground [&_svg]:h-4 [&_svg]:w-4",
+        props.active &&
+          "border-primary/10 bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
       )}
       variant="ghost"
       type="button"

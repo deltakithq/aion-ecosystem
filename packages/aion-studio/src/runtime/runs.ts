@@ -245,6 +245,9 @@ function acceptTranscriptStreamEvent(
       };
     }
   }
+  if (event.type === "final" && event.trace?.traceId !== undefined) {
+    assignTranscriptTraceId(transcript, event.trace.traceId);
+  }
 }
 
 function approvalCallId(approval: { callId?: string; toolCallId?: string }): string | undefined {
@@ -325,6 +328,16 @@ function appendTranscriptAssistantText(transcript: StudioTranscriptEntry[], delt
     role: "assistant",
     text: delta,
   });
+}
+
+function assignTranscriptTraceId(transcript: StudioTranscriptEntry[], traceId: string): void {
+  for (let index = transcript.length - 1; index >= 0; index -= 1) {
+    const entry = transcript[index];
+    if (entry?.kind === "message" && entry.role === "assistant") {
+      transcript[index] = { ...entry, traceId };
+      return;
+    }
+  }
 }
 
 function appendTranscriptReasoningText(

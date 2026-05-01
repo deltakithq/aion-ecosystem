@@ -151,6 +151,7 @@ function renderLegacyStudioUiShell(props: {
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     `<title>${title}</title>`,
+    '<script>(()=>{try{if(localStorage.getItem("aion-studio-theme")==="light"){document.documentElement.classList.remove("dark")}}catch{}})();</script>',
     `<link rel="icon" type="image/png" href="${escapeHtml(props.compatUiPath)}/assets/aion.png">`,
     `<link rel="stylesheet" href="${escapeHtml(props.stylesheet)}">`,
     "</head>",

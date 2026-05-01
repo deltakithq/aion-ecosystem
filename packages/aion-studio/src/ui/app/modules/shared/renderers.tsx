@@ -6,8 +6,54 @@ import { isRecord } from "./object";
 
 export function MarkdownText(props: { text: string }) {
   return (
-    <div className="prose prose-sm max-w-none text-current [overflow-wrap:anywhere] prose-headings:text-current prose-headings:font-semibold prose-p:text-current prose-a:text-current prose-a:decoration-muted-foreground prose-a:underline-offset-2 prose-strong:text-current prose-code:rounded-md prose-code:border prose-code:border-border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-[0.92em] prose-code:font-semibold prose-code:text-current prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-auto prose-pre:rounded-lg prose-pre:border prose-pre:border-border prose-pre:bg-background prose-pre:text-current prose-blockquote:border-border prose-blockquote:text-muted-foreground prose-li:marker:text-muted-foreground prose-hr:border-border dark:prose-invert dark:prose-headings:text-current dark:prose-p:text-current dark:prose-strong:text-current dark:prose-code:text-current dark:prose-pre:bg-background dark:prose-pre:text-current">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{props.text}</ReactMarkdown>
+    <div className="prose prose-sm max-w-none text-current [overflow-wrap:anywhere] prose-headings:text-current prose-headings:font-semibold prose-p:text-current prose-a:text-current prose-a:decoration-muted-foreground prose-a:underline-offset-2 prose-strong:text-current prose-code:rounded-md prose-code:border prose-code:border-border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-[0.92em] prose-code:font-semibold prose-code:text-current prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-auto prose-pre:rounded-lg prose-pre:border prose-pre:border-border prose-pre:bg-card prose-pre:text-current prose-blockquote:border-border prose-blockquote:text-muted-foreground prose-li:marker:text-muted-foreground prose-hr:border-border prose-table:m-0 prose-thead:border-0 prose-tr:border-0 prose-th:p-0 prose-td:p-0 dark:prose-invert dark:prose-headings:text-current dark:prose-p:text-current dark:prose-strong:text-current dark:prose-code:text-current dark:prose-pre:bg-card dark:prose-pre:text-current">
+      <ReactMarkdown
+        components={{
+          table({ children }) {
+            return (
+              <div className="my-4 min-w-0 overflow-hidden rounded-md border border-border bg-card">
+                <div className="min-w-0 overflow-x-auto">
+                  <table className="m-0 w-full min-w-[520px] border-separate border-spacing-0 text-left text-sm">
+                    {children}
+                  </table>
+                </div>
+              </div>
+            );
+          },
+          thead({ children }) {
+            return <thead className="bg-muted/45">{children}</thead>;
+          },
+          tbody({ children }) {
+            return <tbody>{children}</tbody>;
+          },
+          tr({ children }) {
+            return <tr className="group/row align-top">{children}</tr>;
+          },
+          th({ children }) {
+            return (
+              <th
+                className="border-b border-border px-4 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground first:pl-5 last:pr-5"
+                style={{ paddingBottom: "0.625rem", paddingTop: "0.625rem" }}
+              >
+                {children}
+              </th>
+            );
+          },
+          td({ children }) {
+            return (
+              <td
+                className="border-b border-border/70 px-4 text-sm leading-6 text-foreground [overflow-wrap:anywhere] first:pl-5 last:pr-5 group-last/row:border-b-0"
+                style={{ paddingBottom: "0.75rem", paddingTop: "0.75rem" }}
+              >
+                {children}
+              </td>
+            );
+          },
+        }}
+        remarkPlugins={[remarkGfm]}
+      >
+        {props.text}
+      </ReactMarkdown>
     </div>
   );
 }
@@ -21,7 +67,7 @@ export function ToolPayload(props: { title: string; value: string }) {
       {parsed.kind === "json" ? (
         <JsonValueView value={parsed.value} />
       ) : (
-        <div className="min-w-0 whitespace-pre-wrap rounded-md border border-border bg-background/40 p-2 text-[13px] leading-5 text-foreground [overflow-wrap:anywhere]">
+        <div className="min-w-0 whitespace-pre-wrap rounded-md border border-border bg-muted/40 p-2 text-[13px] leading-5 text-foreground [overflow-wrap:anywhere]">
           {parsed.value}
         </div>
       )}

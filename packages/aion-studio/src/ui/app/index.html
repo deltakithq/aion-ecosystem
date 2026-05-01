@@ -4,6 +4,15 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Aion Studio</title>
+    <script>
+      (() => {
+        try {
+          if (localStorage.getItem("aion-studio-theme") === "light") {
+            document.documentElement.classList.remove("dark");
+          }
+        } catch {}
+      })();
+    </script>
     <link rel="icon" type="image/png" href="/ui/assets/aion.png" />
   </head>
   <body>

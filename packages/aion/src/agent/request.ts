@@ -477,6 +477,7 @@ export class PromptRequest<M extends CompletionModel = CompletionModel> {
       {
         agentName: this.agent.name,
         agentDescription: this.agent.description,
+        instructions: this.agent.instructions,
         trace: this.traceOptions,
         prompt: this.promptMessage,
         history: this.chatHistory ?? [],

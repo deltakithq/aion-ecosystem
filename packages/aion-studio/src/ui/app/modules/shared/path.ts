@@ -53,8 +53,14 @@ export function pageLocationFromLocation(): PageLocation {
 }
 
 function pageLocationFromSegments(segments: string[]): PageLocation {
-  const [first, second] = segments;
+  const [first, second, third] = segments;
   if (first === "tracing") {
+    if (second === "sessions") {
+      return {
+        page: "tracing",
+        ...(third === undefined ? {} : { traceSessionId: third }),
+      };
+    }
     return {
       page: "tracing",
       ...(second === undefined ? {} : { traceId: second }),
@@ -102,6 +108,11 @@ export function updateSessionPath(sessionId: string | undefined): void {
 export function updateTracePath(traceId: string): void {
   const normalizedUiPath = normalizePathPrefix(uiPath);
   updateLocationPath(`${normalizedUiPath}/tracing/${encodeURIComponent(traceId)}`);
+}
+
+export function updateTraceSessionPath(sessionId: string): void {
+  const normalizedUiPath = normalizePathPrefix(uiPath);
+  updateLocationPath(`${normalizedUiPath}/tracing/sessions/${encodeURIComponent(sessionId)}`);
 }
 
 export function normalizePathPrefix(path: string): string {

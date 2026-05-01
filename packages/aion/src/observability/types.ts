@@ -26,6 +26,7 @@ export type AgentTraceOptions = {
 export type AgentRunStartArgs = {
   agentName?: string | undefined;
   agentDescription?: string | undefined;
+  instructions?: string | undefined;
   trace?: AgentTraceOptions | undefined;
   prompt: Message;
   history: Message[];

@@ -64,6 +64,7 @@ export type StudioTranscriptChatEntry = {
   kind: "message";
   role: "user" | "assistant";
   text: string;
+  traceId?: string;
 };
 
 export type StudioTranscriptReasoningEntry = {
